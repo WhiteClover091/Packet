@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -34,9 +35,12 @@ func ReadPcapData(filename string) *PacketSource {
 	if err != nil {
 		log.Fatal(err)
 	}
-	packet.reader = *bufio.NewReaderSize(file, 1<<12)
+	packet.reader = *bufio.NewReader(file)
 	pcap_hdr_s := make([]byte, GlobalHeaderLength)
-	packet.reader.Read(pcap_hdr_s)
+	_, err = io.ReadFull(&packet.reader, pcap_hdr_s)
+	if err != nil {
+		log.Fatal(err)
+	}
 	packet.magic_number = binary.BigEndian.Uint32(pcap_hdr_s)
 	if packet.magic_number == 0xd4c3b2a1 {
 		packet.endian = binary.LittleEndian
@@ -69,16 +73,16 @@ type Packet struct {
 func (p *PacketSource) NextPacket() (*Packet, error) {
 	var packet Packet
 	pcaprec_hdr_s := make([]byte, PacketHeaderLength)
-	_, err := p.reader.Read(pcaprec_hdr_s)
+	_, err := io.ReadFull(&p.reader, pcaprec_hdr_s)
 	if err != nil {
 		return nil, err
 	}
-	packet.ts_sec = uint32(pcaprec_hdr_s[3])<<24 + uint32(pcaprec_hdr_s[2])<<16 + uint32(pcaprec_hdr_s[1])<<8 + uint32(pcaprec_hdr_s[0])
-	packet.ts_usec = uint32(pcaprec_hdr_s[7])<<24 + uint32(pcaprec_hdr_s[6])<<16 + uint32(pcaprec_hdr_s[5])<<8 + uint32(pcaprec_hdr_s[4])
-	packet.orig_len = uint32(pcaprec_hdr_s[11])<<24 + uint32(pcaprec_hdr_s[10])<<16 + uint32(pcaprec_hdr_s[9])<<8 + uint32(pcaprec_hdr_s[8])
-	packet.incl_len = uint32(pcaprec_hdr_s[15])<<24 + uint32(pcaprec_hdr_s[14])<<16 + uint32(pcaprec_hdr_s[13])<<8 + uint32(pcaprec_hdr_s[12])
+	packet.ts_sec = p.endian.Uint32(pcaprec_hdr_s)
+	packet.ts_usec = p.endian.Uint32(pcaprec_hdr_s[4:])
+	packet.incl_len = p.endian.Uint32(pcaprec_hdr_s[8:])
+	packet.orig_len = p.endian.Uint32(pcaprec_hdr_s[12:])
 	packetData := make([]byte, packet.incl_len)
-	_, err = p.reader.Read(packetData)
+	_, err = io.ReadFull(&p.reader, packetData)
 	if err != nil {
 		return nil, err
 	}

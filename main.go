@@ -9,8 +9,8 @@ func main() {
 	// fmt.Println(packet.pcaprec_hdr_s)
 	// fmt.Println(packet.CaptureTime())
 	i := 0
-	for packet, _ := packetSource.NextPacket(); i < 100; packet, _ = packetSource.NextPacket() {
-		fmt.Println(i, " ", packet.CaptureTime())
+	for packet, err := packetSource.NextPacket(); i < 10000 && err == nil; packet, err = packetSource.NextPacket() {
+		fmt.Println(i, ": ", packet.CaptureTime())
 		i++
 	}
 }
