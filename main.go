@@ -2,15 +2,34 @@ package main
 
 import (
 	"fmt"
+	"log"
 )
 
 func main() {
 	packetSource := ReadPcapData("2022-08-02-11-04-45-11.122.30.47.pcap")
 	// fmt.Println(packet.pcaprec_hdr_s)
 	// fmt.Println(packet.CaptureTime())
-	i := 0
-	for packet, err := packetSource.NextPacket(); i < 10000 && err == nil; packet, err = packetSource.NextPacket() {
-		fmt.Println(i, ": ", packet.CaptureTime())
-		i++
+	packet, err := packetSource.NextPacket()
+	if err != nil {
+		log.Fatal(err)
 	}
+	ethernet := NewEthernet(packet)
+	fmt.Println(ethernet.DstMAC, ethernet.SrcMAC, ethernet.EtherType == 0x0800)
+	ipv4 := NewIPv4FromEthernet(*ethernet)
+	fmt.Println(ipv4.DstAddress, ipv4.SrcAddress, ipv4.ProtocolType)
+	fmt.Printf("%02x\n", ipv4.ProtocolType)
+	ipip := NewIPv4FromIPv4(ipv4)
+	fmt.Println(ipip.DstAddress, ipip.SrcAddress, ipip.ProtocolType)
+	fmt.Printf("%02x\n", ipip.ProtocolType)
+	tcp := NewTCPFromIPv4(ipip)
+	fmt.Println(tcp.SrcPort, tcp.DstPort, tcp.ACK, tcp.PSH, tcp.SYN, tcp.FIN)
+	fmt.Printf("%08b\n", ipip.Payload[13])
+	var i int
+	for i = 0; ipv4.ProtocolType != IPProtocolTypeGRE || err != nil; packet, err = packetSource.NextPacket() {
+		i++
+		ethernet = NewEthernet(packet)
+		ipv4 = NewIPv4FromEthernet(*ethernet)
+		fmt.Println(ipv4.ProtocolType)
+	}
+	fmt.Println(i)
 }
