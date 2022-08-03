@@ -21,23 +21,54 @@ const (
 
 var IPProtocolType []byte = []byte{0x01, 0x04, 0x06, 0x11, 0x29, 0x2F, 0x3A}
 
+type LayerType struct {
+	layerNumber byte //1 for link layer, 2 for network layer, 3 for transport layer
+	protocol    uint16
+}
+
+var LayerEthernet LayerType = LayerType{layerNumber: 1, protocol: 0}
+var LayerIPv4 LayerType = LayerType{layerNumber: 2, protocol: 0x0800}
+var LayerIPv6 LayerType = LayerType{layerNumber: 2, protocol: 0x86DD}
+var LayerError LayerType = LayerType{layerNumber: 0, protocol: 0}
+var LayerICMP LayerType = LayerType{layerNumber: 3, protocol: 0x01}
+var LayerTCP LayerType = LayerType{layerNumber: 3, protocol: 0x06}
+var LayerUDP LayerType = LayerType{layerNumber: 3, protocol: 0x11}
+var LayerGRE LayerType = LayerType{layerNumber: 2, protocol: 0x2F}
+var LayerICMPv6 LayerType = LayerType{layerNumber: 3, protocol: 0x3A}
+
+type Layer interface {
+	Payload() []byte
+	LayerType() LayerType
+	NextLayerType() LayerType
+}
 type Ethernet struct {
 	DstMAC    net.HardwareAddr
 	SrcMAC    net.HardwareAddr
 	EtherType uint16
-	Payload   []byte
+	payload   []byte
 }
 
+func (ethernet *Ethernet) Payload() []byte {
+	return ethernet.payload
+}
+func (ethernet *Ethernet) LayerType() LayerType {
+	return LayerEthernet
+}
+func (ethernet *Ethernet) NextLayerType() LayerType {
+	switch ethernet.EtherType {
+	case 0x0800:
+		return LayerIPv4
+	case 0x86DD:
+		return LayerIPv6
+	}
+	return LayerError
+}
 func NewEthernet(p *Packet) *Ethernet {
 	var ethernet Ethernet
 	ethernet.DstMAC = p.packetData[:6]
 	ethernet.SrcMAC = p.packetData[6:12]
 	ethernet.EtherType = binary.BigEndian.Uint16(p.packetData[12:])
-	if ethernet.EtherType != EthernetTypeIPv4 && ethernet.EtherType != EthernetTypeIpv6 {
-		errMessage := fmt.Sprintf("Ethernet: Unsupported EthernetType: 0x%04x", ethernet.EtherType)
-		log.Fatal(errMessage)
-	}
-	ethernet.Payload = p.packetData[14:]
+	ethernet.payload = p.packetData[14:]
 	return &ethernet
 }
 
@@ -45,44 +76,44 @@ type IPv4 struct {
 	SrcAddress   net.IP
 	DstAddress   net.IP
 	ProtocolType byte
-	Payload      []byte
+	payload      []byte
 }
 
-func NewIPv4FromEthernet(ethernet Ethernet) *IPv4 {
-	var ipv4 IPv4
-	ipv4.SrcAddress = ethernet.Payload[12:16]
-	ipv4.DstAddress = ethernet.Payload[16:20]
-	ipv4.ProtocolType = ethernet.Payload[9]
-	var ok bool
-	for _, protocol := range IPProtocolType {
-		if ipv4.ProtocolType == protocol {
-			ok = true
-		}
-	}
-	if !ok {
-		errMessage := fmt.Sprintf("IPv4: Unsupported IPProtocolType: 0x%02x", ipv4.ProtocolType)
-		log.Fatal(errMessage)
-	}
-	ipv4.Payload = ethernet.Payload[20:]
-	return &ipv4
+func (ipv4 *IPv4) Payload() []byte {
+	return ipv4.payload
 }
-
-func NewIPv4FromIPv4(ip *IPv4) *IPv4 {
+func (ipv4 *IPv4) LayerType() LayerType {
+	return LayerIPv4
+}
+func (ipv4 *IPv4) NextLayerType() LayerType {
+	switch ipv4.ProtocolType {
+	case 0x01:
+		return LayerICMP
+	case 0x04:
+		return LayerIPv4
+	case 0x06:
+		return LayerTCP
+	case 0x11:
+		return LayerUDP
+	case 0x29:
+		return LayerIPv6
+	case 0x2F:
+		return LayerGRE
+	case 0x3A:
+		return LayerICMPv6
+	}
+	return LayerError
+}
+func NewIPv4(layer Layer) *IPv4 {
 	var ipv4 IPv4
-	ipv4.SrcAddress = ip.Payload[12:16]
-	ipv4.DstAddress = ip.Payload[16:20]
-	ipv4.ProtocolType = ip.Payload[9]
-	var ok bool
-	for _, protocol := range IPProtocolType {
-		if ipv4.ProtocolType == protocol {
-			ok = true
-		}
+	if layer.LayerType() != LayerEthernet && layer.LayerType() != LayerIPv4 && layer.LayerType() != LayerGRE {
+		log.Fatal("This is not a Ethernet Frame or a IPv4 Frame")
 	}
-	if !ok {
-		errMessage := fmt.Sprintf("IPv4: Unsupported IPProtocolType: 0x%02x", ipv4.ProtocolType)
-		log.Fatal(errMessage)
-	}
-	ipv4.Payload = ip.Payload[20:]
+	frame := layer.Payload()
+	ipv4.SrcAddress = frame[12:16]
+	ipv4.DstAddress = frame[16:20]
+	ipv4.ProtocolType = frame[9]
+	ipv4.payload = frame[20:]
 	return &ipv4
 }
 
@@ -93,61 +124,169 @@ type TCP struct {
 	PSH     bool
 	SYN     bool
 	FIN     bool
-	Payload []byte
+	payload []byte
 }
 
-func NewTCPFromIPv4(ipv4 *IPv4) *TCP {
+func (tcp *TCP) Payload() []byte {
+	return tcp.payload
+}
+func (tcp *TCP) LayerType() LayerType {
+	return LayerTCP
+}
+func (tcp *TCP) NextLayerType() LayerType {
+	return LayerError
+}
+func NewTCP(layer Layer) *TCP {
 	var tcp TCP
-	tcp.SrcPort = binary.BigEndian.Uint16(ipv4.Payload)
-	tcp.DstPort = binary.BigEndian.Uint16(ipv4.Payload[2:])
-	if ipv4.Payload[13]&0b00010000 != 0 {
+	if layer.LayerType() != LayerIPv4 {
+		log.Fatal("This is not a IPv4 Frame")
+	}
+	frame := layer.Payload()
+	tcp.SrcPort = binary.BigEndian.Uint16(frame)
+	tcp.DstPort = binary.BigEndian.Uint16(frame[2:])
+	if frame[13]&0b00010000 != 0 {
 		tcp.ACK = true
 	}
-	if ipv4.Payload[13]&0b00001000 != 0 {
+	if frame[13]&0b00001000 != 0 {
 		tcp.PSH = true
 	}
-	if ipv4.Payload[13]&0b00000010 != 0 {
+	if frame[13]&0b00000010 != 0 {
 		tcp.SYN = true
 	}
-	if ipv4.Payload[13]&0b00000001 != 0 {
+	if frame[13]&0b00000001 != 0 {
 		tcp.FIN = true
 	}
-	tcp.Payload = ipv4.Payload[21:]
+	if len(frame) == 20 {
+		return &tcp
+	}
+	tcp.payload = frame[21:]
 	return &tcp
 }
 
 type UDP struct {
 	SrcPort uint16
 	DstPort uint16
-	Payload []byte
+	payload []byte
 }
 
-func NewUDPFromIPv4(ipv4 *IPv4) *UDP {
+func (udp *UDP) Payload() []byte {
+	return udp.payload
+}
+func (udp *UDP) LayerType() LayerType {
+	return LayerUDP
+}
+func (udp *UDP) NextLayerType() LayerType {
+	return LayerError
+}
+func NewUDP(layer Layer) *UDP {
 	var udp UDP
-	udp.SrcPort = binary.BigEndian.Uint16(ipv4.Payload)
-	udp.DstPort = binary.BigEndian.Uint16(ipv4.Payload[2:])
-	udp.Payload = ipv4.Payload[8:]
+	if layer.LayerType() != LayerIPv4 {
+		log.Fatal("This is not a IPv4 Frame")
+	}
+	frame := layer.Payload()
+	udp.SrcPort = binary.BigEndian.Uint16(frame)
+	udp.DstPort = binary.BigEndian.Uint16(frame[2:])
+	udp.payload = frame[8:]
 	return &udp
 }
 
 type GRE struct {
 	ProtocalType uint16
-	Payload      []byte
+	payload      []byte
 }
 
-func NewGRE(ipv4 *IPv4) *GRE {
+func (gre *GRE) Payload() []byte {
+	return gre.payload
+}
+func (gre *GRE) LayerType() LayerType {
+	return LayerGRE
+}
+func (gre *GRE) NextLayerType() LayerType {
+	return LayerIPv4
+}
+func NewGRE(layer Layer) *GRE {
 	var gre GRE
-	gre.ProtocalType = binary.BigEndian.Uint16(ipv4.Payload[2:])
-	offset := 0
-	if ipv4.Payload[0]&0b1000 != 0 {
-		offset += 4
+	if layer.LayerType() != LayerIPv4 {
+		log.Fatal("This is not a IPv4 Frame")
 	}
-	if ipv4.Payload[0]&0b0010 != 0 {
-		offset += 4
+	frame := layer.Payload()
+	gre.ProtocalType = binary.BigEndian.Uint16(frame[2:])
+	var offset int = 0
+	if frame[0]&0b10000000 != 0 {
+		offset = offset + 4
 	}
-	if ipv4.Payload[0]&0b0001 != 0 {
-		offset += 4
+	if frame[0]&0b00100000 != 0 {
+		offset = offset + 4
 	}
-	gre.Payload = ipv4.Payload[4+offset:]
+	if frame[0]&0b00010000 != 0 {
+		offset = offset + 4
+	}
+	gre.payload = frame[4+offset:]
 	return &gre
+}
+
+type ICMP struct {
+	Code byte
+}
+
+func (icmp *ICMP) Payload() []byte {
+	return nil
+}
+
+func (icmp *ICMP) LayerType() LayerType {
+	return LayerICMP
+}
+func (icmp *ICMP) NextLayerType() LayerType {
+	return LayerError
+}
+
+func NewICMP(layer Layer) *ICMP {
+	var icmp ICMP
+	if layer.LayerType() != LayerIPv4 {
+		log.Fatal("This is not a IPv4 Frame")
+	}
+	frame := layer.Payload()
+	icmp.Code = frame[1]
+	return &icmp
+}
+
+func PacketDump(packet *Packet) {
+	fmt.Println(packet.CaptureTime())
+	ethernet := NewEthernet(packet)
+	fmt.Println("Ethernet:")
+	fmt.Printf("DstMAC: %v SrcMAC: %v\n", ethernet.DstMAC, ethernet.SrcMAC)
+	var layer Layer = ethernet
+	for layer.LayerType().layerNumber != 3 {
+		switch layer.NextLayerType() {
+		case LayerIPv4:
+			layer = NewIPv4(layer)
+			fmt.Println("IPv4:")
+			fmt.Printf("DstAddr: %v SrcAddr: %v Protocal: %04x\n", layer.(*IPv4).DstAddress, layer.(*IPv4).SrcAddress, layer.(*IPv4).ProtocolType)
+		case LayerGRE:
+			layer = NewGRE(layer)
+			fmt.Println("GRE:")
+			fmt.Printf("Protocol: %04x\n", layer.(*GRE).ProtocalType)
+		case LayerICMP:
+			layer = NewICMP(layer)
+			fmt.Println("ICMP:")
+			fmt.Printf("Code: %d\n", layer.(*ICMP).Code)
+		case LayerTCP:
+			layer = NewTCP(layer)
+			fmt.Println("TCP:")
+			fmt.Printf("DstPort: %v SrcPort: %v\n", layer.(*TCP).DstPort, layer.(*TCP).SrcPort)
+		case LayerUDP:
+			layer = NewUDP(layer)
+			fmt.Println("UDP:")
+			fmt.Printf("DstPort: %v SrcPort: %v\n", layer.(*UDP).DstPort, layer.(*UDP).SrcPort)
+		case LayerError:
+			log.Fatal("Unsupported layer")
+		}
+	}
+}
+
+func Hex(b []byte) {
+	for _, v := range b {
+		fmt.Printf("%02x ", v)
+	}
+	fmt.Println()
 }
