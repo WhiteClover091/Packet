@@ -129,3 +129,25 @@ func NewUDPFromIPv4(ipv4 *IPv4) *UDP {
 	udp.Payload = ipv4.Payload[8:]
 	return &udp
 }
+
+type GRE struct {
+	ProtocalType uint16
+	Payload      []byte
+}
+
+func NewGRE(ipv4 *IPv4) *GRE {
+	var gre GRE
+	gre.ProtocalType = binary.BigEndian.Uint16(ipv4.Payload[2:])
+	offset := 0
+	if ipv4.Payload[0]&0b1000 != 0 {
+		offset += 4
+	}
+	if ipv4.Payload[0]&0b0010 != 0 {
+		offset += 4
+	}
+	if ipv4.Payload[0]&0b0001 != 0 {
+		offset += 4
+	}
+	gre.Payload = ipv4.Payload[4+offset:]
+	return &gre
+}

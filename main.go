@@ -23,13 +23,11 @@ func main() {
 	fmt.Printf("%02x\n", ipip.ProtocolType)
 	tcp := NewTCPFromIPv4(ipip)
 	fmt.Println(tcp.SrcPort, tcp.DstPort, tcp.ACK, tcp.PSH, tcp.SYN, tcp.FIN)
-	fmt.Printf("%08b\n", ipip.Payload[13])
-	var i int
-	for i = 0; ipv4.ProtocolType != IPProtocolTypeGRE || err != nil; packet, err = packetSource.NextPacket() {
-		i++
-		ethernet = NewEthernet(packet)
-		ipv4 = NewIPv4FromEthernet(*ethernet)
-		fmt.Println(ipv4.ProtocolType)
-	}
-	fmt.Println(i)
+	packet, _ = packetSource.NextPacket()
+	ethernet = NewEthernet(packet)
+	fmt.Println(ethernet.DstMAC, ethernet.SrcMAC, ethernet.EtherType == 0x0800)
+	ipv4 = NewIPv4FromEthernet(*ethernet)
+	fmt.Println(ipv4.DstAddress, ipv4.SrcAddress, ipv4.ProtocolType)
+	gre := NewGRE(ipv4)
+	fmt.Printf("%04x\n", gre.ProtocalType)
 }
