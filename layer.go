@@ -269,7 +269,7 @@ func PacketDump(packet *Packet) {
 		case LayerIPv4:
 			layer = NewIPv4(layer)
 			fmt.Println("IPv4:")
-			fmt.Printf("DstAddr: %v SrcAddr: %v Protocal: %04x\n", layer.(*IPv4).DstAddress, layer.(*IPv4).SrcAddress, layer.(*IPv4).ProtocolType)
+			fmt.Printf("DstAddr: %v SrcAddr: %v Protocal: %04x\n", layer.(*IPv4).DstAddress.String(), layer.(*IPv4).SrcAddress.String(), layer.(*IPv4).ProtocolType)
 		case LayerGRE:
 			layer = NewGRE(layer)
 			fmt.Println("GRE:")
