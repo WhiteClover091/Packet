@@ -7,8 +7,8 @@ import (
 )
 
 type Connection struct {
-	SrcIP   [4]byte
-	DstIP   [4]byte
+	SrcIP   IP
+	DstIP   IP
 	SrcPort uint16
 	DstPort uint16
 	layer   LayerType
@@ -57,4 +57,50 @@ type ConnectionInfo struct {
 	begin_time   time.Time
 	end_time     time.Time
 	payloadbytes int
+}
+
+type ConnectionList map[Connection]ConnectionInfo
+
+func (list ConnectionList) filter(packet_num int, livetime time.Duration) ConnectionList {
+	filteredList := make(ConnectionList)
+	for k, v := range list {
+		if v.packet_num >= packet_num && v.end_time.Sub(v.begin_time) >= livetime {
+			filteredList[k] = v
+		}
+	}
+	return filteredList
+}
+func (list ConnectionList) totalPacket() int {
+	cnt := 0
+	for _, v := range list {
+		cnt += v.packet_num
+	}
+	return cnt
+}
+func (list ConnectionList) totalBytes() int {
+	cnt := 0
+	for _, v := range list {
+		cnt += v.payloadbytes
+	}
+	return cnt
+}
+
+func (list ConnectionList) MaxPacketNumber() int {
+	max := 0
+	for _, v := range list {
+		if v.packet_num > max {
+			max = v.packet_num
+		}
+	}
+	return max
+}
+
+func (list ConnectionList) MaxLiveTime() time.Duration {
+	var d time.Duration
+	for _, v := range list {
+		if v.end_time.Sub(v.begin_time) > d {
+			d = v.end_time.Sub(v.begin_time)
+		}
+	}
+	return d
 }

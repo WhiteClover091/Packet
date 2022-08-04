@@ -10,10 +10,13 @@ func main() {
 	// fmt.Println(packet.pcaprec_hdr_s)
 	// fmt.Println(packet.CaptureTime())
 	begin := time.Now()
-	connectionlist := make(map[Connection]ConnectionInfo)
+	connectionlist := make(ConnectionList)
 	i := 0
-	for packet, err := packetSource.NextPacket(); err == nil && i < 50000; packet, err = packetSource.NextPacket() {
+	for packet, err := packetSource.NextPacket(); err == nil; packet, err = packetSource.NextPacket() {
 		connection := GetConnection(packet)
+		if connection.layer == LayerICMP {
+			continue
+		}
 		_, ok := connectionlist[connection]
 		if !ok {
 			connectionlist[connection] = ConnectionInfo{packet_num: 1, begin_time: packet.CaptureTime(), payloadbytes: int(packet.orig_len), end_time: packet.CaptureTime()}
@@ -26,20 +29,20 @@ func main() {
 		}
 		i++
 	}
-	cnt := 0
-	for k, v := range connectionlist {
-		fmt.Printf("DstIP: %d.%d.%d.%d\t SrcIP: %d.%d.%d.%d\t DstPort:%d\t SrcPort:%d\t ", k.DstIP[0], k.DstIP[1], k.DstIP[2], k.DstIP[3], k.SrcIP[0], k.SrcIP[1], k.SrcIP[2], k.SrcIP[3], k.DstPort, k.SrcPort)
-		if k.layer == LayerTCP {
-			fmt.Printf("TCP\n ")
-		} else if k.layer == LayerUDP {
-			fmt.Printf("UDP\n ")
-		} else if k.layer == LayerICMP {
-			fmt.Printf("ICMP\n ")
-		}
-		fmt.Printf("begin at %v, end at %v, last for %v, total Packet: %d, total bytes: %d\n", v.begin_time, v.end_time, v.end_time.Sub(v.begin_time), v.packet_num, v.payloadbytes)
-		cnt++
-	}
-	fmt.Printf("Total connection : %d\n", cnt)
+	filteredlist := connectionlist.filter(8, 20*time.Second)
+	// for k, v := range filteredlist {
+	// 	fmt.Printf("DstIP: %d.%d.%d.%d\t SrcIP: %d.%d.%d.%d\t DstPort:%d\t SrcPort:%d\t ", k.DstIP[0], k.DstIP[1], k.DstIP[2], k.DstIP[3], k.SrcIP[0], k.SrcIP[1], k.SrcIP[2], k.SrcIP[3], k.DstPort, k.SrcPort)
+	// 	if k.layer == LayerTCP {
+	// 		fmt.Printf("TCP\n ")
+	// 	} else if k.layer == LayerUDP {
+	// 		fmt.Printf("UDP\n ")
+	// 	} else if k.layer == LayerICMP {
+	// 		fmt.Printf("ICMP\n ")
+	// 	}
+	// 	fmt.Printf("begin at %v, end at %v, last for %v, total Packet: %d, total bytes: %d\n", v.begin_time, v.end_time, v.end_time.Sub(v.begin_time), v.packet_num, v.payloadbytes)
+	// }
+	fmt.Printf("Total Package: %d, Total Bytes: %d MB\n", filteredlist.totalPacket(), filteredlist.totalBytes()/1024/1024)
+	fmt.Printf("MaxPacketNumber: %d, MaxLiveTime: %v, Total Package: %d Total Bytes: %d MB\n", connectionlist.MaxPacketNumber(), connectionlist.MaxLiveTime(), connectionlist.totalPacket(), connectionlist.totalBytes()/1024/1024)
 	end := time.Now()
 	fmt.Println(end.Sub(begin))
 	// ethernet := NewEthernet(packet)

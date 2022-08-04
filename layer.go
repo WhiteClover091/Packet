@@ -72,9 +72,15 @@ func NewEthernet(p *Packet) *Ethernet {
 	return &ethernet
 }
 
+type IP [4]byte
+
+func (ip *IP) String() string {
+	return fmt.Sprintf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3])
+}
+
 type IPv4 struct {
-	SrcAddress   [4]byte
-	DstAddress   [4]byte
+	SrcAddress   IP
+	DstAddress   IP
 	ProtocolType byte
 	payload      []byte
 }
