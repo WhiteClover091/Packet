@@ -73,8 +73,8 @@ func NewEthernet(p *Packet) *Ethernet {
 }
 
 type IPv4 struct {
-	SrcAddress   net.IP
-	DstAddress   net.IP
+	SrcAddress   [4]byte
+	DstAddress   [4]byte
 	ProtocolType byte
 	payload      []byte
 }
@@ -110,8 +110,10 @@ func NewIPv4(layer Layer) *IPv4 {
 		log.Fatal("This is not a Ethernet Frame or a IPv4 Frame")
 	}
 	frame := layer.Payload()
-	ipv4.SrcAddress = frame[12:16]
-	ipv4.DstAddress = frame[16:20]
+	for i := 0; i < 4; i++ {
+		ipv4.SrcAddress[i] = frame[i+12]
+		ipv4.DstAddress[i] = frame[i+16]
+	}
 	ipv4.ProtocolType = frame[9]
 	ipv4.payload = frame[20:]
 	return &ipv4
