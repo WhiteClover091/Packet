@@ -104,3 +104,22 @@ func (list ConnectionList) MaxLiveTime() time.Duration {
 	}
 	return d
 }
+
+func (list ConnectionList) AddConnection(ps *PacketSource) {
+	for packet, err := ps.NextPacket(); err == nil; packet, err = ps.NextPacket() {
+		connection := GetConnection(packet)
+		if connection.layer == LayerICMP {
+			continue
+		}
+		_, ok := list[connection]
+		if !ok {
+			list[connection] = ConnectionInfo{packet_num: 1, begin_time: packet.CaptureTime(), payloadbytes: int(packet.orig_len), end_time: packet.CaptureTime()}
+		} else {
+			connectioninfo := list[connection]
+			connectioninfo.packet_num++
+			connectioninfo.end_time = packet.CaptureTime()
+			connectioninfo.payloadbytes += int(packet.incl_len)
+			list[connection] = connectioninfo
+		}
+	}
+}
