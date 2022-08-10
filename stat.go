@@ -14,7 +14,7 @@ type Connection struct {
 	layer   LayerType
 }
 
-var ICMPConnection Connection = Connection{SrcIP: [4]byte{0, 0, 0, 0}, DstIP: [4]byte{0, 0, 0, 0}, DstPort: 0, SrcPort: 0, layer: LayerICMP}
+var IngoreConnection Connection = Connection{SrcIP: [4]byte{0, 0, 0, 0}, DstIP: [4]byte{0, 0, 0, 0}, DstPort: 0, SrcPort: 0, layer: LayerError}
 
 func (connnection *Connection) ConnectTo() Connection {
 	return Connection{SrcIP: connnection.DstIP, DstIP: connnection.SrcIP, SrcPort: connnection.DstPort, DstPort: connnection.SrcPort, layer: connnection.layer}
@@ -25,17 +25,23 @@ func GetConnection(packet *Packet) Connection {
 	ipv4 := NewIPv4(ethernet)
 	connection.DstIP = ipv4.DstAddress
 	connection.SrcIP = ipv4.SrcAddress
+	if connection.DstIP[0] == 11 && connection.DstIP[1] == 122 && connection.SrcIP[0] == 11 && connection.SrcIP[1] == 122 {
+		return IngoreConnection
+	}
 	if ipv4.NextLayerType() == LayerGRE {
 		gre := NewGRE(ipv4)
 		ipv4 = NewIPv4(gre)
 	} else if ipv4.NextLayerType() == LayerIPv4 {
 		ipv4 = NewIPv4(ipv4)
 	} else if ipv4.NextLayerType() == LayerICMP {
-		return ICMPConnection
+		return IngoreConnection
 	} else if ipv4.NextLayerType() != LayerTCP && ipv4.NextLayerType() != LayerUDP {
 		fmt.Println(ipv4.LayerType())
 		fmt.Println(ipv4.NextLayerType())
 		log.Fatal("unsupported layer")
+	}
+	if ipv4.DstAddress == ipv4.SrcAddress {
+		return IngoreConnection
 	}
 	connection.layer = ipv4.NextLayerType()
 	if connection.layer == LayerUDP {
@@ -47,7 +53,7 @@ func GetConnection(packet *Packet) Connection {
 		connection.DstPort = tcp.DstPort
 		connection.SrcPort = tcp.SrcPort
 	} else if connection.layer == LayerICMP {
-		return ICMPConnection
+		return IngoreConnection
 	}
 	return connection
 }
@@ -61,54 +67,59 @@ type ConnectionInfo struct {
 
 type ConnectionList map[Connection]ConnectionInfo
 
-func (list ConnectionList) filter(packet_num int, livetime time.Duration) ConnectionList {
-	filteredList := make(ConnectionList)
+func (list ConnectionList) StatInfo() {
+	beginTime, tcpBeginTime, udpBeginTime := time.Now(), time.Now(), time.Now()
+	var endTime, tcpEndTime, udpEndTime time.Time
+	packetNum, tcpPacketNum, udpPacketNum := 0, 0, 0
+	bytes, tcpBytes, udpBytes := 0, 0, 0
+	connNum, tcpConnNum, udpConnNum := 0, 0, 0
 	for k, v := range list {
-		if v.packet_num >= packet_num && v.end_time.Sub(v.begin_time) >= livetime {
-			filteredList[k] = v
+		update(&v, &packetNum, &bytes, &connNum, &beginTime, &endTime)
+		if k.layer == LayerTCP {
+			update(&v, &tcpPacketNum, &tcpBytes, &tcpConnNum, &tcpBeginTime, &tcpEndTime)
+		} else if k.layer == LayerUDP {
+			update(&v, &udpPacketNum, &udpBytes, &udpConnNum, &udpBeginTime, &udpEndTime)
 		}
 	}
-	return filteredList
+	fmt.Println("Total:")
+	statDump(packetNum, bytes, connNum, beginTime, endTime)
+	fmt.Println()
+	fmt.Println("TCP:")
+	statDump(tcpPacketNum, tcpBytes, tcpConnNum, tcpBeginTime, tcpEndTime)
+	fmt.Println()
+	fmt.Println("UDP:")
+	statDump(udpPacketNum, udpBytes, udpConnNum, udpBeginTime, udpEndTime)
+	fmt.Println()
 }
-func (list ConnectionList) totalPacket() int {
-	cnt := 0
-	for _, v := range list {
-		cnt += v.packet_num
+func update(v *ConnectionInfo, packetNum *int, bytes *int, connNum *int, beginTime *time.Time, endTime *time.Time) {
+	*packetNum += v.packet_num
+	*bytes += v.payloadbytes
+	*connNum++
+	if beginTime.After(v.begin_time) {
+		*beginTime = v.begin_time
 	}
-	return cnt
-}
-func (list ConnectionList) totalBytes() int {
-	cnt := 0
-	for _, v := range list {
-		cnt += v.payloadbytes
+	if endTime.Before(v.end_time) {
+		*endTime = v.end_time
 	}
-	return cnt
 }
+func statDump(packetNum int, bytes int, connNum int, beginTime time.Time, endTime time.Time) {
+	totalBytes := float64(bytes) / 1024 / 1024
+	lastTime := endTime.Sub(beginTime)
+	bandWidth := totalBytes / float64(lastTime) * 1e9
+	fmt.Println("Begin at ", beginTime, "End at ", endTime, "Last for ", lastTime)
+	fmt.Println("Connection Number: ", connNum)
+	fmt.Println("Packet Number: ", packetNum)
+	fmt.Println("Total Bytes: ", totalBytes, "MB")
+	fmt.Println("Bindwidth: ", bandWidth, "MB/s")
+	fmt.Println("Connection Desity: ")
+	fmt.Println("\t Connection Number / Total Bytes: ", float64(connNum)/totalBytes, "/MB")
+	fmt.Println("\t Connection Number / Packet Number: ", float64(connNum)/float64(packetNum))
 
-func (list ConnectionList) MaxPacketNumber() int {
-	max := 0
-	for _, v := range list {
-		if v.packet_num > max {
-			max = v.packet_num
-		}
-	}
-	return max
 }
-
-func (list ConnectionList) MaxLiveTime() time.Duration {
-	var d time.Duration
-	for _, v := range list {
-		if v.end_time.Sub(v.begin_time) > d {
-			d = v.end_time.Sub(v.begin_time)
-		}
-	}
-	return d
-}
-
 func (list ConnectionList) AddConnection(ps *PacketSource) {
 	for packet, err := ps.NextPacket(); err == nil; packet, err = ps.NextPacket() {
 		connection := GetConnection(packet)
-		if connection.layer == LayerICMP {
+		if connection == IngoreConnection {
 			continue
 		}
 		_, ok := list[connection]
@@ -117,7 +128,11 @@ func (list ConnectionList) AddConnection(ps *PacketSource) {
 		} else {
 			connectioninfo := list[connection]
 			connectioninfo.packet_num++
-			connectioninfo.end_time = packet.CaptureTime()
+			if packet.CaptureTime().Sub(connectioninfo.begin_time) < 0 {
+				connectioninfo.begin_time = packet.CaptureTime()
+			} else if packet.CaptureTime().Sub(connectioninfo.end_time) > 0 {
+				connectioninfo.end_time = packet.CaptureTime()
+			}
 			connectioninfo.payloadbytes += int(packet.incl_len)
 			list[connection] = connectioninfo
 		}
