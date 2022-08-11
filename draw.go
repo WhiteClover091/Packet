@@ -74,7 +74,7 @@ func DrawLiveTimeHist(list ConnectionList, min int, max int, ymax float64, filen
 
 func DrawScatter(list ConnectionList, pmin int, pmax int, filename string) {
 	p := plot.New()
-	p.X.Label.Text = "Connection Number"
+	p.X.Label.Text = "Packet Number"
 	p.Y.Label.Text = "Live time/s"
 
 	var pts plotter.XYs
@@ -92,6 +92,7 @@ func DrawScatter(list ConnectionList, pmin int, pmax int, filename string) {
 		log.Fatal(err)
 	}
 	s.Radius = 1
+	p.Y.Max = 300
 	p.Add(s)
 
 	if err := p.Save(10*vg.Inch, 10*vg.Inch, filename); err != nil {
@@ -105,48 +106,41 @@ func DrawBoxplot(list ConnectionList, pmin, pmax int, filename string) {
 	p.X.Label.Text = "Packet number"
 	p.Y.Label.Text = "Live Time/s"
 	w := vg.Points(5)
-	for i := pmin; i <= pmax; i++ {
-		var value plotter.Values
-		for _, v := range list {
-			if v.packet_num == i {
-				d := float64(v.end_time.Sub(v.begin_time)) / float64(time.Second)
-				value = append(value, d)
-			}
-		}
-		if len(value) == 0 {
-			continue
-		}
-		b0, err := plotter.NewBoxPlot(w, float64(i), value)
-		if err != nil {
-			log.Fatal(err)
-		}
-		b0.GlyphStyle.Radius = 0.5
-		p.Add(b0)
-	}
-	DrawAvgLiveTime(p, list, pmin, pmax)
-	if err := p.Save(10*vg.Inch, 10*vg.Inch, filename); err != nil {
-		log.Fatal(err)
-	}
-}
-func DrawAvgLiveTime(p *plot.Plot, list ConnectionList, pmin, pmax int) {
+
+	//box plot
+	values := make([]plotter.Values, pmax-pmin+1)
 	num := make([]int, pmax-pmin+1)
 	totaltime := make([]float64, pmax-pmin+1)
 	for _, v := range list {
-		if v.packet_num <= pmax && v.packet_num >= pmin {
+		if v.packet_num >= pmin && v.packet_num <= pmax {
+			d := float64(v.end_time.Sub(v.begin_time)) / float64(time.Second)
+			values[v.packet_num-pmin] = append(values[v.packet_num-pmin], d)
 			num[v.packet_num-pmin]++
-			totaltime[v.packet_num-pmin] += float64(v.end_time.Sub(v.begin_time)) / float64(time.Second)
+			totaltime[v.packet_num-pmin] += d
 		}
 	}
-	var values plotter.XYs
+	for i := 0; i < pmax-pmin+1; i++ {
+		if len(values[i]) != 0 {
+			b, err := plotter.NewBoxPlot(w, float64(i+pmin), values[i])
+			if err != nil {
+				log.Fatal(err)
+			}
+			b.GlyphStyle.Radius = 0.5
+			p.Add(b)
+		}
+	}
+
+	//line and points
+	var pts plotter.XYs
 	for i := 0; i < pmax-pmin+1; i++ {
 		if num[i] != 0 {
-			var value plotter.XY
-			value.X = float64(pmin + i)
-			value.Y = totaltime[i] / float64(num[i])
-			values = append(values, value)
+			var pt plotter.XY
+			pt.X = float64(pmin + i)
+			pt.Y = totaltime[i] / float64(num[i])
+			pts = append(pts, pt)
 		}
 	}
-	lpLine, lpPoints, err := plotter.NewLinePoints(values)
+	lpLine, lpPoints, err := plotter.NewLinePoints(pts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -156,4 +150,8 @@ func DrawAvgLiveTime(p *plot.Plot, list ConnectionList, pmin, pmax int) {
 	lpPoints.Shape = draw.BoxGlyph{}
 	p.Legend.Add("Avg Live Time", lpLine, lpPoints)
 	p.Add(lpLine, lpPoints)
+
+	if err := p.Save(10*vg.Inch, 10*vg.Inch, filename); err != nil {
+		log.Fatal(err)
+	}
 }
