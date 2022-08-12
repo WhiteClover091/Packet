@@ -11,6 +11,7 @@ var cliConnection = flag.Bool("c", false, "输出连接五元组")
 var cliStat = flag.Bool("s", false, "输出统计结果")
 var cliDraw = flag.Bool("d", false, "绘图")
 var cliFilteredPacket = flag.Bool("fp", false, "过滤包")
+var cliFilteredConnection = flag.Bool("fc", false, "过滤连接")
 
 func main() {
 	flag.Parse()
@@ -68,6 +69,9 @@ func main() {
 	if *cliFilteredPacket {
 		ps := ReadPcapData(flag.Arg(0))
 		FilterPacket(ps, ALLIP, ALLIP, ALLPORT, ALLPORT)
+	}
+	if *cliFilteredConnection {
+
 	}
 }
 
