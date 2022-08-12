@@ -10,6 +10,7 @@ var cliPacket = flag.Bool("p", false, "解析报文")
 var cliConnection = flag.Bool("c", false, "输出连接五元组")
 var cliStat = flag.Bool("s", false, "输出统计结果")
 var cliDraw = flag.Bool("d", false, "绘图")
+var cliFilteredPacket = flag.Bool("fp", false, "过滤包")
 
 func main() {
 	flag.Parse()
@@ -58,40 +59,19 @@ func main() {
 	}
 
 	if *cliDraw {
-		VIP := IP([4]byte{140, 207, 118, 222})
-		for k, _ := range list {
-			if k.DstIP != VIP {
-				fmt.Println(k.DstIP)
-			}
-		}
-		// DrawScatter(list, 0, 40, "scatter.png")
-		// DrawPacketNumberHist(list, 1, 40, 45, "phist.png")
-		// DrawLiveTimeHist(list, 1, 250, 2, "thist.png")
-		// DrawBoxplot(list, 1, 40, "box.png")
+		DrawScatter(list, 0, 40, "scatter.png")
+		DrawPacketNumberHist(list, 1, 40, 45, "phist.png")
+		DrawLiveTimeHist(list, 1, 250, 2, "thist.png")
+		DrawBoxplot(list, 1, 40, "box.png")
 	}
-	// iptable := make(map[byte]int)
-	// for _, filename := range flag.Args() {
-	// 	PacketSource := ReadPcapData(filename)
-	// 	for packet, err := PacketSource.NextPacket(); err == nil; packet, err = PacketSource.NextPacket() {
-	// 		ethernet := NewEthernet(packet)
-	// 		if ethernet.NextLayerType() != LayerIPv4 {
-	// 			log.Fatal("error: not a ipv4 packet")
-	// 		}
-	// 		ipv4 := NewIPv4(ethernet)
-	// 		if ipv4.NextLayerType() == LayerTCP {
-	// 			iptable[ipv4.DstAddress[0]]++
-	// 			iptable[ipv4.SrcAddress[0]]++
-	// 		}
-	// 	}
-	// }
-	// i := 0
-	// cnt := 0
-	// for k, v := range iptable {
-	// 	fmt.Println(i, ": ", k, ".0.0.0", v)
-	// 	i++
-	// 	if k != 140 {
-	// 		cnt += v
-	// 	}
-	// }
-	// fmt.Println(cnt, " ", iptable[140])
+
+	if *cliFilteredPacket {
+		ps := ReadPcapData(flag.Arg(0))
+		FilterPacket(ps, ALLIP, ALLIP, ALLPORT, ALLPORT)
+	}
+}
+
+type ipAndPort struct {
+	ip   IP
+	port int
 }

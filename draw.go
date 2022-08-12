@@ -155,3 +155,22 @@ func DrawBoxplot(list ConnectionList, pmin, pmax int, filename string) {
 		log.Fatal(err)
 	}
 }
+
+func DrawPayloadHist(ps *PacketSource) {
+	var values plotter.Values
+	for packet, err := ps.NextPacket(); err == nil; packet, err = ps.NextPacket() {
+		values = append(values, float64(packet.incl_len))
+	}
+
+	p := plot.New()
+	h, err := plotter.NewHist(values, 100)
+	if err != nil {
+		log.Fatal(err)
+	}
+	p.Add(h)
+	p.X.Max = 100
+
+	if err := p.Save(10*vg.Inch, 10*vg.Inch, "payload.png"); err != nil {
+		log.Fatal(err)
+	}
+}

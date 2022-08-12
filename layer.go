@@ -132,6 +132,11 @@ type TCP struct {
 	PSH     bool
 	SYN     bool
 	FIN     bool
+	NS      bool
+	CWR     bool
+	ECE     bool
+	URG     bool
+	RST     bool
 	payload []byte
 }
 
@@ -163,6 +168,21 @@ func NewTCP(layer Layer) *TCP {
 	}
 	if frame[13]&0b00000001 != 0 {
 		tcp.FIN = true
+	}
+	if frame[12]&0b00000001 != 0 {
+		tcp.NS = true
+	}
+	if frame[13]&0b10000000 != 0 {
+		tcp.CWR = true
+	}
+	if frame[13]&0b01000000 != 0 {
+		tcp.ECE = true
+	}
+	if frame[13]&0b00100000 != 0 {
+		tcp.URG = true
+	}
+	if frame[13]&0b00000100 != 0 {
+		tcp.RST = true
 	}
 	if len(frame) == 20 {
 		return &tcp
