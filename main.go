@@ -33,7 +33,7 @@ func main() {
 	}
 
 	list := make(ConnectionList)
-	if *cliConnection || *cliDraw || *cliStat {
+	if *cliConnection || *cliDraw || *cliStat || *cliFilteredConnection {
 		for _, filename := range flag.Args() {
 			packetSource := ReadPcapData(filename)
 			list.AddConnection(packetSource)
@@ -60,10 +60,16 @@ func main() {
 	}
 
 	if *cliDraw {
-		DrawScatter(list, 0, 40, "scatter.png")
-		DrawPacketNumberHist(list, 1, 40, 45, "phist.png")
-		DrawLiveTimeHist(list, 1, 250, 2, "thist.png")
-		DrawBoxplot(list, 1, 40, "box.png")
+		for k, v := range list {
+			if v.packet_num == 9 {
+				fmt.Println(k.SrcIP.String(), k.SrcPort)
+				fmt.Println(v.SYN, v.PSH, v.ACK, v.FIN)
+			}
+		}
+		// DrawScatter(list, 0, 50000, "scatter.png")
+		// DrawPacketNumberHist(list, 0, 100, 35, "phist.png")
+		// DrawLiveTimeHist(list, 0, 320, 100, "thist.png")
+		// DrawBoxplot(list, 0, 100, "box.png")
 	}
 
 	if *cliFilteredPacket {
@@ -71,11 +77,9 @@ func main() {
 		FilterPacket(ps, ALLIP, ALLIP, ALLPORT, ALLPORT)
 	}
 	if *cliFilteredConnection {
-
+		ip := IP{121, 51, 22, 28}
+		FilterConnection(list, ALLNUM, ip, ALLIP, ALLPORT, ALLPORT)
 	}
 }
 
-type ipAndPort struct {
-	ip   IP
-	port int
-}
+func PrintPayload() {}

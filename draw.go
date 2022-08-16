@@ -18,7 +18,7 @@ func DrawPacketNumberHist(list ConnectionList, min int, max int, ymax float64, f
 	p.Y.Label.Text = "Connection Percentage/%"
 
 	var values plotter.Values
-	maxv, minv := 0, int((^0)>>1)
+	maxv, minv := 0, 10000000
 	for _, v := range list {
 		value := v.packet_num
 		if value > maxv {
@@ -28,7 +28,7 @@ func DrawPacketNumberHist(list ConnectionList, min int, max int, ymax float64, f
 		}
 		values = append(values, float64(value))
 	}
-	h, err := plotter.NewHist(values, maxv-minv+1)
+	h, err := plotter.NewHist(values, maxv-minv)
 	if err != nil {
 		log.Fatal(err)
 	}

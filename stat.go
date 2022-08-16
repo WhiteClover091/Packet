@@ -163,7 +163,7 @@ func statDump(packetNum int, bytes int, connNum int, beginTime time.Time, endTim
 	fmt.Println("Bindwidth: ", bandWidth, "MB/s")
 	fmt.Println("Connection Desity: ")
 	fmt.Println("\t Connection Number / Total Bytes: ", float64(connNum)/totalBytes, "/MB")
-	fmt.Println("\t Connection Number / Packet Number: ", float64(packetNum)/float64(connNum))
+	fmt.Println("\t Packet Number / Connection Number: ", float64(packetNum)/float64(connNum))
 
 }
 func (list ConnectionList) AddConnection(ps *PacketSource) {
@@ -172,9 +172,15 @@ func (list ConnectionList) AddConnection(ps *PacketSource) {
 		if connection == IngoreConnection {
 			continue
 		}
+		// ip := IP{121, 51, 22, 28}
+		// if connection.SrcIP != ip {
+		// 	continue
+		// }
 		_, ok := list[connection]
 		if !ok {
-			list[connection] = ConnectionInfo{packet_num: 1, begin_time: packet.CaptureTime(), payloadbytes: int(packet.orig_len), end_time: packet.CaptureTime()}
+			list[connection] = ConnectionInfo{packet_num: 1, begin_time: packet.CaptureTime(), payloadbytes: int(packet.orig_len), end_time: packet.CaptureTime(),
+				ACK: tcpinfo.ACK, PSH: tcpinfo.PSH, FIN: tcpinfo.FIN, SYN: tcpinfo.SYN, CWR: tcpinfo.CWR, ECE: tcpinfo.ECE, URG: tcpinfo.URG,
+				RST: tcpinfo.RST, NS: tcpinfo.NS}
 		} else {
 			connectioninfo := list[connection]
 			connectioninfo.packet_num++

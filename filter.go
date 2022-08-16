@@ -65,9 +65,11 @@ var ALLNUM = 0
 
 func FilterConnection(list ConnectionList, packetNum int, SrcIP, DstIP IP, SrcPort, DstPort int) {
 	num, totalnum := 0, 0
+	bytes, totalBytes := 0, 0
 	for k, v := range list {
 		totalnum++
-		if packetNum != ALLNUM && packetNum != v.packet_num {
+		totalBytes += v.payloadbytes
+		if packetNum != ALLNUM && packetNum > v.packet_num {
 			continue
 		}
 		if DstIP != ALLIP && DstIP != k.DstIP {
@@ -83,9 +85,13 @@ func FilterConnection(list ConnectionList, packetNum int, SrcIP, DstIP IP, SrcPo
 			continue
 		}
 		fmt.Printf("begin at %v, end at %v\n", v.begin_time, v.end_time)
+		fmt.Printf("SrcIP: %v DstIP: %v SrcPort:%v DstPort: %v\n", k.SrcIP.String(), k.DstIP.String(), k.SrcPort, k.DstPort)
 		fmt.Printf("packet num: %v, live time %v\n", v.packet_num, v.end_time.Sub(v.begin_time))
 		fmt.Println()
 		num++
+		bytes += v.payloadbytes
 	}
-	fmt.Printf("connection number: %v, total: %v percentage:%v", num, totalnum, float64(num)/float64(totalnum))
+	fmt.Printf("connection number: %v, total: %v percentage:%v\n", num, totalnum, float64(num)/float64(totalnum))
+	fmt.Printf("Bytes: %v KB, Total: %v MB, Percentage: %v\n", float64(bytes)/1024, float64(totalBytes)/1024/1024, float64(bytes)/float64(totalBytes))
+
 }
