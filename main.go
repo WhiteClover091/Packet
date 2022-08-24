@@ -12,6 +12,7 @@ var cliStat = flag.Bool("s", false, "输出统计结果")
 var cliDraw = flag.Bool("d", false, "绘图")
 var cliFilteredPacket = flag.Bool("fp", false, "过滤包")
 var cliFilteredConnection = flag.Bool("fc", false, "过滤连接")
+var cliReport = flag.Bool("r", false, "生成报告")
 
 func main() {
 	flag.Parse()
@@ -60,16 +61,19 @@ func main() {
 	}
 
 	if *cliDraw {
+		vip := IP{10, 53, 216, 112}
+		i := 0
 		for k, v := range list {
-			if v.packet_num == 9 {
-				fmt.Println(k.SrcIP.String(), k.SrcPort)
-				fmt.Println(v.SYN, v.PSH, v.ACK, v.FIN)
+			if k.SrcIP != vip && k.DstIP != vip {
+				fmt.Print(i, ":")
+				i++
+				fmt.Println(k.SrcIP.String(), k.DstIP.String(), v.packet_num)
 			}
 		}
-		// DrawScatter(list, 0, 50000, "scatter.png")
-		// DrawPacketNumberHist(list, 0, 100, 35, "phist.png")
-		// DrawLiveTimeHist(list, 0, 320, 100, "thist.png")
-		// DrawBoxplot(list, 0, 100, "box.png")
+		// DrawScatter(list, 0, 50000, "draw/scatter.png")
+		// DrawPacketNumberHist(list, 0, 100, 35, "draw/phist.png")
+		// DrawLiveTimeHist(list, 0, 320, 100, "draw/thist.png")
+		// DrawBoxplot(list, 0, 100, "draw/box.png")
 	}
 
 	if *cliFilteredPacket {
@@ -79,6 +83,10 @@ func main() {
 	if *cliFilteredConnection {
 		ip := IP{121, 51, 22, 28}
 		FilterConnection(list, ALLNUM, ip, ALLIP, ALLPORT, ALLPORT)
+	}
+	if *cliReport {
+		vip := IP{43, 129, 96, 245}
+		GetReport(flag.Args(), "IN:香港-沙田-M4-S1-40G-CAP-IP-QcloudIP漂移-DPDK-SET1的VIP:43.129.96.245", vip, IN)
 	}
 }
 

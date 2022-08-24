@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 )
@@ -49,9 +48,10 @@ func GetConnection(packet *Packet) (Connection, tcpInfo) {
 	} else if ipv4.NextLayerType() == LayerICMP {
 		return IngoreConnection, tcpInfo{}
 	} else if ipv4.NextLayerType() != LayerTCP && ipv4.NextLayerType() != LayerUDP {
-		fmt.Println(ipv4.LayerType())
-		fmt.Println(ipv4.NextLayerType())
-		log.Fatal("unsupported layer")
+		return IngoreConnection, tcpInfo{}
+		// fmt.Println(ipv4.LayerType())
+		// fmt.Println(ipv4.NextLayerType())
+		// log.Fatal("unsupported layer")
 	}
 	if ipv4.DstAddress == ipv4.SrcAddress {
 		return IngoreConnection, tcpInfo{}
@@ -172,10 +172,6 @@ func (list ConnectionList) AddConnection(ps *PacketSource) {
 		if connection == IngoreConnection {
 			continue
 		}
-		// ip := IP{121, 51, 22, 28}
-		// if connection.SrcIP != ip {
-		// 	continue
-		// }
 		_, ok := list[connection]
 		if !ok {
 			list[connection] = ConnectionInfo{packet_num: 1, begin_time: packet.CaptureTime(), payloadbytes: int(packet.orig_len), end_time: packet.CaptureTime(),
@@ -231,4 +227,23 @@ func PrintInOrder(table map[interface{}]int) {
 	for _, item := range list {
 		fmt.Println(item.k, item.v)
 	}
+}
+func FilterDstIP(list ConnectionList, ip IP) ConnectionList {
+	flist := make(ConnectionList)
+	for k, v := range list {
+		if k.DstIP == ip {
+			flist[k] = v
+		}
+	}
+	return flist
+}
+
+func FilterSrcIP(list ConnectionList, ip IP) ConnectionList {
+	flist := make(ConnectionList)
+	for k, v := range list {
+		if k.SrcIP == ip {
+			flist[k] = v
+		}
+	}
+	return flist
 }
