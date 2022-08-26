@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"time"
@@ -17,12 +18,28 @@ const (
 	OUT = 2
 )
 
-func GetReport(filenames []string, reportname string, vip IP, direction int) {
+func GetReport(dirname string, reportname string, vip IP, direction int) {
+	if direction == IN {
+		reportname = "IN:" + reportname
+	} else if direction == OUT {
+		reportname = "OUT:" + reportname
+	}
 	f, err := os.Create(reportname + ".md")
 	if err != nil {
 		log.Fatal(err)
 	}
 	list := make(ConnectionList)
+	dir, err := os.Open(dirname)
+	if err != nil {
+		log.Fatal("Can't Open directory", dirname)
+	}
+	filenames, err := dir.Readdirnames(0)
+	if err != nil {
+		log.Fatal("Can't read directory", dirname)
+	}
+	for i := 0; i < len(filenames); i++ {
+		filenames[i] = dirname + "/" + filenames[i]
+	}
 	for _, filename := range filenames {
 		ps := ReadPcapData(filename)
 		list.AddConnection(ps)
@@ -35,7 +52,7 @@ func GetReport(filenames []string, reportname string, vip IP, direction int) {
 
 	f.Write([]byte("# " + reportname + "文件抓包数据统计\n"))
 	TotalStat(f, list, direction)
-	// Picture(f, list, reportname, filename)
+	Picture(f, list, reportname, filenames)
 
 	err = f.Close()
 	if err != nil {
@@ -99,7 +116,7 @@ func WriteFunc(f *os.File, begin, end time.Time, packet_num, total_bytes, conn_n
 	f.Write([]byte(msg))
 	msg = fmt.Sprintf("- 连接数：%v\n- 报文数: %v\n- 总字节数： %.2fMB\n", conn_num, packet_num, total_bytes_MB)
 	f.Write([]byte(msg))
-	msg = fmt.Sprintf("- 带宽： %.2f MB/s\n- 连接密度： \n\t- 总字节数/连接数：%.2fMB\n\t- 报文数/连接数：%.2f\n",
+	msg = fmt.Sprintf("- 带宽： %.2f MB/s\n- 连接密度： \n\t- 总字节数/连接数：%.4fMB\n\t- 报文数/连接数：%.2f\n",
 		float64(total_bytes_MB)/float64(end.Sub(begin))*float64(time.Second),
 		float64(total_bytes_MB)/float64(conn_num),
 		float64(packet_num)/float64(conn_num))
@@ -131,7 +148,8 @@ func sortMapByValue(m map[IP]int) PairList {
 	return p
 }
 
-func Picture(f *os.File, list ConnectionList, dirname, filename string) {
+func Picture(f *os.File, list ConnectionList, dirname string, filenames []string) {
+	dirname = "PictureOf" + dirname
 	os.Mkdir(dirname, os.ModePerm)
 
 	msg := "## 连接的报文数目和存活时间分布\n"
@@ -157,7 +175,7 @@ func Picture(f *os.File, list ConnectionList, dirname, filename string) {
 	LiveTimeHist(f, lltime, dirname)
 	msg = "### 仅含有一个报文的连接的捕获时间\n"
 	f.Write([]byte(msg))
-	OnePacketCaptureTimeHist(f, list, dirname, filename)
+	OnePacketCaptureTimeHist(f, list, dirname, filenames)
 }
 func PacketHist(f *os.File, packet_num plotter.Values, dirname string) {
 	p := plot.New()
@@ -167,6 +185,7 @@ func PacketHist(f *os.File, packet_num plotter.Values, dirname string) {
 		log.Fatal(err)
 	}
 	xmin, xmax, _, _ := h.DataRange()
+	xmax = math.Ceil(xmax)
 	h, err = plotter.NewHist(packet_num, int(xmax)-int(xmin))
 	if err != nil {
 		log.Fatal(err)
@@ -270,12 +289,17 @@ func Scatter(f *os.File, packet_num, lltime plotter.Values, dirname string) {
 	f.Write([]byte(msg))
 }
 
-func OnePacketCaptureTimeHist(f *os.File, list ConnectionList, dirname, filename string) {
-	var captime plotter.Values
-	ps := ReadPcapData(filename)
-	p, _ := ps.NextPacket()
-	begintime := p.CaptureTime()
+func OnePacketCaptureTimeHist(f *os.File, list ConnectionList, dirname string, filenames []string) {
+	begintime := time.Now()
+	for _, filename := range filenames {
+		ps := ReadPcapData(filename)
+		p, _ := ps.NextPacket()
+		if p.CaptureTime().Before(begintime) {
+			begintime = p.CaptureTime()
+		}
+	}
 
+	var captime plotter.Values
 	for _, v := range list {
 		if v.packet_num == 1 {
 			captime = append(captime, float64(v.begin_time.Sub(begintime))/float64(time.Second))

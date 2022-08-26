@@ -116,6 +116,9 @@ func NewIPv4(layer Layer) *IPv4 {
 		log.Fatal("This is not a Ethernet Frame or a IPv4 Frame")
 	}
 	frame := layer.Payload()
+	if len(layer.Payload()) < 19 {
+		return &ipv4
+	}
 	for i := 0; i < 4; i++ {
 		ipv4.SrcAddress[i] = frame[i+12]
 		ipv4.DstAddress[i] = frame[i+16]
