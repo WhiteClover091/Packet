@@ -3,41 +3,62 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
-var cliDraw = flag.Bool("d", false, "绘图")
-var cliFilteredConnection = flag.Bool("fc", false, "过滤连接")
+var cliFilter = flag.Bool("f", false, "过滤连接")
 var cliReport = flag.Bool("r", false, "生成报告")
+var cliDir = flag.String("dir", "", "指定目录")
+var cliVip = flag.String("vip", "", "指定Vip")
 
 func main() {
 	flag.Parse()
+	vip := GetVip(cliVip)
 
-	list := make(ConnectionList)
+	if *cliFilter {
+		dir, err := os.Open(*cliDir)
+		if err != nil {
+			log.Fatal("Can not open dir ", *cliDir, err)
+		}
+		filenames, _ := dir.Readdirnames(0)
+		for i := 0; i < len(filenames); i++ {
+			filenames[i] = *cliDir + "/" + filenames[i]
+		}
 
-	if *cliDraw {
-		vip := IP{10, 53, 216, 112}
-		i := 0
-		for k, v := range list {
-			if k.SrcIP != vip && k.DstIP != vip {
-				fmt.Print(i, ":")
-				i++
-				fmt.Println(k.SrcIP.String(), k.DstIP.String(), v.packet_num)
+		list := make(ConnectionList)
+		for _, filename := range filenames {
+			if strings.HasSuffix(filename, ".pcap") {
+				ps := ReadPcapData(filename)
+				list.AddConnection(ps)
 			}
 		}
-		// DrawScatter(list, 0, 50000, "draw/scatter.png")
-		// DrawPacketNumberHist(list, 0, 100, 35, "draw/phist.png")
-		// DrawLiveTimeHist(list, 0, 320, 100, "draw/thist.png")
-		// DrawBoxplot(list, 0, 100, "draw/box.png")
-	}
-
-	if *cliFilteredConnection {
-		ip := IP{121, 51, 22, 28}
-		FilterConnection(list, ALLNUM, ip, ALLIP, ALLPORT, ALLPORT)
+		for k, v := range list {
+			lltime := v.end_time.Sub(v.begin_time)
+			if lltime > 29*time.Second && lltime < 31*time.Second && (k.SrcIP == vip || k.DstIP == vip) {
+				fmt.Println("host", k.SrcIP.String(), "and port", k.SrcPort, "---> host", k.DstIP.String(), "and port", k.DstPort, v.packet_num)
+			}
+		}
 	}
 	if *cliReport {
-		vip := IP{1, 116, 149, 115}
-		GetReport(flag.Arg(0), "test3", vip, IN)
+		fmt.Println(vip.String())
+		Report(*cliDir, vip)
+		// GetReport(flag.Arg(0), "test3", vip, IN)
 	}
 }
 
-func PrintPayload() {}
+func GetVip(str *string) IP {
+	strs := strings.Split(*str, ".")
+	var vip IP
+	for i, v := range strs {
+		v, err := strconv.Atoi(v)
+		if err != nil {
+			log.Fatal("Cannot convert vip\n", err)
+		}
+		vip[i] = byte(v)
+	}
+	return vip
+}

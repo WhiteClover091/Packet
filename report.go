@@ -116,7 +116,7 @@ func WriteFunc(f *os.File, begin, end time.Time, packet_num, total_bytes, conn_n
 	f.Write([]byte(msg))
 	msg = fmt.Sprintf("- 连接数：%v\n- 报文数: %v\n- 总字节数： %.2fMB\n", conn_num, packet_num, total_bytes_MB)
 	f.Write([]byte(msg))
-	msg = fmt.Sprintf("- 带宽： %.2f MB/s\n- 连接密度： \n\t- 总字节数/连接数：%.4fMB\n\t- 报文数/连接数：%.2f\n",
+	msg = fmt.Sprintf("- 带宽： %.4f MB/s\n- 连接密度： \n\t- 总字节数/连接数：%.4fMB\n\t- 报文数/连接数：%.2f\n",
 		float64(total_bytes_MB)/float64(end.Sub(begin))*float64(time.Second),
 		float64(total_bytes_MB)/float64(conn_num),
 		float64(packet_num)/float64(conn_num))
